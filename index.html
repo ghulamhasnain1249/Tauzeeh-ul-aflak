@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <script>
+      // Ignore Vite HMR WebSocket connection errors in AI Studio iframe environment
+      window.addEventListener('unhandledrejection', function(e) {
+        var msg = (e.reason && (e.reason.message || e.reason.stack || String(e.reason))) || '';
+        if (msg.includes('WebSocket') || msg.includes('@vite/client') || msg.includes('createWebSocketModuleRunnerTransport')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+      window.addEventListener('error', function(e) {
+        var msg = (e.message || (e.error && (e.error.message || e.error.stack)) || '') + ' ' + (e.filename || '');
+        if (msg.includes('WebSocket') || msg.includes('@vite/client') || msg.includes('createWebSocketModuleRunnerTransport')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Falak: Islamic Celestial Spheres Model</title>
+    <meta name="description" content="A mathematically authentic, interactive 3D simulation of classical Islamic celestial mechanics and astronomical models according to Al-Tusi, Ibn al-Shatir, Al-Biruni, and Al-Battani." />
+    <meta property="og:title" content="Falak: Islamic Celestial Spheres Model" />
+    <meta property="og:description" content="A mathematically authentic, interactive 3D simulation of classical Islamic celestial mechanics and astronomical models according to Al-Tusi, Ibn al-Shatir, Al-Biruni, and Al-Battani." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Cinzel:wght@400;600;700;900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

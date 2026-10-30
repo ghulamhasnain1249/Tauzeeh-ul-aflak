@@ -24,8 +24,6 @@ import {
   Send,
   Sparkles,
   BookOpen,
-  Volume2,
-  VolumeX,
   X,
   Camera,
   Calendar,
@@ -34,10 +32,13 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   RotateCcw,
   Sliders,
   CheckCircle2,
   HelpCircle,
+  Zap,
 } from 'lucide-react';
 
 interface ControlOverlayProps {
@@ -66,12 +67,32 @@ export const ControlOverlay: React.FC<ControlOverlayProps> = ({
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('textbook');
   const [activeChapter, setActiveChapter] = useState<number>(1);
   const [isCameraMenuOpen, setIsCameraMenuOpen] = useState(false);
-  const [isDateTimeModalOpen, setIsDateTimeModalOpen] = useState(false);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
-  // Web Audio Context for Celestial Harmonics (موسیقی الأفلاک)
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
+  const [isMobileSecondaryOpen, setIsMobileSecondaryOpen] = useState(false);
+
+  // Simulation Speeds Definition & Cycle Helper for Mobile Ergonomics
+  const SPEEDS = useMemo(
+    () => [
+      { label: '1x', val: 1 },
+      { label: '1m/s', val: 60 },
+      { label: '1h/s', val: 3600 },
+      { label: '1d/s', val: 86400 },
+      { label: '10d/s', val: 864000 },
+    ],
+    []
+  );
+
+  const currentSpeedLabel = useMemo(() => {
+    const match = SPEEDS.find((s) => s.val === simState.timeSpeed);
+    return match ? match.label : `${simState.timeSpeed}x`;
+  }, [SPEEDS, simState.timeSpeed]);
+
+  const cycleSpeed = () => {
+    const speeds = [1, 60, 3600, 86400, 864000];
+    const idx = speeds.indexOf(simState.timeSpeed);
+    const nextIdx = (idx + 1) % speeds.length;
+    onUpdateState({ timeSpeed: speeds[nextIdx] });
+  };
 
   // AI Scholar State
   const [scholarPrompt, setScholarPrompt] = useState('');
@@ -108,48 +129,6 @@ export const ControlOverlay: React.FC<ControlOverlayProps> = ({
     const idx = moonEphem.mansionIndex || 1;
     return LUNAR_MANSIONS_DATA[idx - 1] || LUNAR_MANSIONS_DATA[0];
   }, [moonEphem.mansionIndex]);
-
-  // Audio Toggle
-  const toggleCelestialAudio = () => {
-    try {
-      if (!audioCtxRef.current) {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        audioCtxRef.current = new AudioCtx();
-
-        const masterGain = audioCtxRef.current.createGain();
-        masterGain.gain.setValueAtTime(0.0001, audioCtxRef.current.currentTime);
-        masterGain.connect(audioCtxRef.current.destination);
-        gainNodeRef.current = masterGain;
-
-        const freqs = [108, 162, 216, 324];
-        freqs.forEach((freq, idx) => {
-          if (!audioCtxRef.current) return;
-          const osc = audioCtxRef.current.createOscillator();
-          const oscGain = audioCtxRef.current.createGain();
-          osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
-          osc.frequency.setValueAtTime(freq, audioCtxRef.current.currentTime);
-          oscGain.gain.setValueAtTime(0.015 / (idx + 1), audioCtxRef.current.currentTime);
-          osc.connect(oscGain);
-          oscGain.connect(masterGain);
-          osc.start();
-        });
-      }
-
-      if (audioCtxRef.current.state === 'suspended') {
-        audioCtxRef.current.resume();
-      }
-
-      if (isAudioPlaying) {
-        gainNodeRef.current?.gain.setTargetAtTime(0.0001, audioCtxRef.current.currentTime, 0.4);
-        setIsAudioPlaying(false);
-      } else {
-        gainNodeRef.current?.gain.setTargetAtTime(0.025, audioCtxRef.current.currentTime, 0.4);
-        setIsAudioPlaying(true);
-      }
-    } catch {
-      // Audio autoplay policy
-    }
-  };
 
   const setCameraView = (preset: string) => {
     setIsCameraMenuOpen(false);
@@ -412,16 +391,10 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
       {/* =================================================================== */}
       {/* 1. TOP HEADER BAR: BRAND, MODE SELECTOR, LIVE STATUS & TOOLS */}
       {/* =================================================================== */}
-      <header className="pointer-events-auto w-full h-14 bg-gray-950/90 backdrop-blur-md border-b border-gray-800/80 px-3 md:px-5 flex items-center justify-between gap-3 z-20">
-        {/* Brand & Cosmological Axiom */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5">
-            <span className="font-serif text-lg font-bold text-amber-300 tracking-wide">فَلَك</span>
-            <span className="text-gray-600">/</span>
-            <span className="text-xs font-serif text-gray-300 hidden sm:inline">علم الہیئۃ البطلیموسی</span>
-          </div>
-
-          <div className="hidden xl:flex items-center gap-2 text-[11px] text-gray-400 pl-2 border-l border-gray-800">
+      <header className="pointer-events-auto w-full h-14 bg-gray-950/95 backdrop-blur-md border-b border-gray-800/80 px-2 sm:px-4 md:px-5 flex items-center justify-between gap-1.5 sm:gap-3 z-20 pt-safe">
+        {/* Cosmological Axioms */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+          <div className="hidden xl:flex items-center gap-2 text-[11px] text-gray-400">
             <span>زمین ساکن (0,0,0)</span>
             <span aria-hidden="true" className="text-gray-600">·</span>
             <span>24h گردشِ اطلس</span>
@@ -431,7 +404,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
         </div>
 
         {/* Central Segmented Mode Switcher */}
-        <div className="flex items-center p-0.5 bg-gray-900 border border-gray-800 rounded-xl">
+        <div className="flex items-center p-0.5 bg-gray-900 border border-gray-800 rounded-xl flex-shrink-0">
           <button
             onClick={() => {
               onUpdateState({
@@ -439,7 +412,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                 showPlanets: false,
               });
             }}
-            className={`px-3 py-1 text-xs font-serif transition-colors rounded-lg flex items-center gap-1.5 ${
+            className={`min-h-[38px] px-2 sm:px-3 py-1 text-xs font-serif transition-colors rounded-lg flex items-center gap-1 sm:gap-1.5 ${
               simState.textbookFocusMode === 'CORE_EARTH_SUN_MOON' && !simState.showPlanets
                 ? 'bg-amber-500 text-gray-950 font-bold shadow-sm'
                 : 'text-gray-300 hover:text-white'
@@ -447,7 +420,8 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
             title="Core Textbook Mode: Earth, Sun, Moon only"
           >
             <span>📖</span>
-            <span>بنیادی افلاک (ارض، شمس، قمر)</span>
+            <span className="hidden sm:inline">بنیادی افلاک (ارض، شمس، قمر)</span>
+            <span className="sm:hidden">بنیادی</span>
           </button>
 
           <button
@@ -457,7 +431,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                 showPlanets: true,
               });
             }}
-            className={`px-3 py-1 text-xs font-serif transition-colors rounded-lg flex items-center gap-1.5 ${
+            className={`min-h-[38px] px-2 sm:px-3 py-1 text-xs font-serif transition-colors rounded-lg flex items-center gap-1 sm:gap-1.5 ${
               simState.showPlanets
                 ? 'bg-sky-600 text-white font-bold shadow-sm'
                 : 'text-gray-400 hover:text-white'
@@ -465,30 +439,19 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
             title="Include the 5 Classical Wandering Planets (Mercury, Venus, Mars, Jupiter, Saturn)"
           >
             <span>🪐</span>
-            <span>سبعہ سیارہ (5 سیارے شامل کریں)</span>
+            <span className="hidden sm:inline">سبعہ سیارہ (5 سیارے)</span>
+            <span className="sm:hidden">سیارے</span>
           </button>
         </div>
 
         {/* Right Section: Date & Time Selector Button, Live Ticker, Diurnal Toggle, Camera, Drawer */}
-        <div className="flex items-center gap-2">
-          {/* USER DATE & TIME SELECTOR TRIGGER */}
-          <button
-            onClick={() => setIsDateTimeModalOpen(true)}
-            className="px-2.5 py-1.5 rounded-xl bg-gray-900 hover:bg-gray-800 border border-amber-500/40 text-amber-300 hover:text-amber-200 transition-all text-xs font-mono flex items-center gap-2 shadow-sm"
-            title="Click to select Date, Time, Equinoxes, or Historic Epochs"
-          >
-            <Calendar className="w-3.5 h-3.5 text-amber-400" />
-            <span className="font-bold">{dateInfo.formattedDate}</span>
-            <span className="text-gray-400 hidden sm:inline">{dateInfo.formattedTime} UTC</span>
-            <span className="text-[10px] text-sky-300 font-serif hidden lg:inline">({hijriDate.monthNameAr})</span>
-          </button>
-
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
           {/* Diurnal 24h Rotation Toggle (Falak al-Atlas based on LST) */}
           <button
             id="btnAutoRotate"
             aria-label="گردشِ فلکِ اطلس (شب و روز)"
             onClick={() => onUpdateState({ isAtlasAutoRotating: !simState.isAtlasAutoRotating })}
-            className={`px-3 py-1.5 rounded-xl text-xs font-serif flex items-center gap-1.5 transition-all border ${
+            className={`min-h-[38px] min-w-[38px] px-2 sm:px-3 py-1 rounded-xl text-xs font-serif flex items-center justify-center gap-1 sm:gap-1.5 transition-all border ${
               simState.isAtlasAutoRotating
                 ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
                 : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200'
@@ -496,8 +459,8 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
             title="Toggle Falak al-Atlas 24-hour Diurnal Rotation (Mathematically derived from Sidereal Time)"
           >
             <span className={simState.isAtlasAutoRotating ? 'animate-spin' : ''}>🌌</span>
-            <span className="hidden sm:inline">گردشِ اطلس</span>
-            <span className="text-[10px] font-mono opacity-80">
+            <span className="hidden md:inline">گردشِ اطلس</span>
+            <span className="text-[10px] font-mono opacity-80 hidden sm:inline">
               {simState.isAtlasAutoRotating ? 'LST' : 'OFF'}
             </span>
           </button>
@@ -506,48 +469,48 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
           <div className="relative">
             <button
               onClick={() => setIsCameraMenuOpen(!isCameraMenuOpen)}
-              className="p-2 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 hover:text-amber-300 transition-colors"
+              className="min-h-[38px] min-w-[38px] p-2 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 hover:text-amber-300 active:bg-gray-800 transition-colors flex items-center justify-center"
               title="Camera View Angles"
             >
               <Camera className="w-4 h-4" />
             </button>
 
             {isCameraMenuOpen && (
-              <div className="absolute right-0 mt-2 w-48 rounded-xl bg-gray-950 border border-amber-600/40 p-1 shadow-2xl backdrop-blur-xl z-50 text-xs">
+              <div className="absolute right-0 mt-2 w-52 rounded-xl bg-gray-950/98 border border-amber-600/40 p-1 shadow-2xl backdrop-blur-xl z-50 text-xs">
                 <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-gray-500 font-mono border-b border-gray-800">
                   Camera Presets
                 </div>
                 <button
                   onClick={() => setCameraView('COSMIC')}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
                 >
                   <span>🌌 Cosmic Overview</span>
                   <span className="text-[10px] text-gray-500 font-serif">عالمِ کل</span>
                 </button>
                 <button
                   onClick={() => setCameraView('EARTH_CLOSE')}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
                 >
                   <span>🌍 Earth & Horizon</span>
                   <span className="text-[10px] text-gray-500 font-serif">مرکزِ زمین</span>
                 </button>
                 <button
                   onClick={() => setCameraView('MOON_PHASE')}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
                 >
                   <span>🌙 Moon Phase</span>
                   <span className="text-[10px] text-gray-500 font-serif">اشکالِ قمر</span>
                 </button>
                 <button
                   onClick={() => setCameraView('ECLIPTIC_SIDE')}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
                 >
                   <span>📐 23.44° Ecliptic Tilt</span>
                   <span className="text-[10px] text-gray-500 font-serif">میلِ کلی</span>
                 </button>
                 <button
                   onClick={() => setCameraView('POLAR_NORTH')}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-gray-300 hover:text-amber-300 hover:bg-gray-900 transition-colors flex items-center justify-between"
                 >
                   <span>🧭 Polar North View</span>
                   <span className="text-[10px] text-gray-500 font-serif">قطبِ شمالی</span>
@@ -556,23 +519,10 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
             )}
           </div>
 
-          {/* Audio Harmonics Toggle */}
-          <button
-            onClick={toggleCelestialAudio}
-            className={`p-2 rounded-xl border transition-colors ${
-              isAudioPlaying
-                ? 'bg-amber-600/30 border-amber-500/60 text-amber-300'
-                : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-gray-200'
-            }`}
-            title="Harmonics of the Spheres (موسیقی الأفلاک)"
-          >
-            {isAudioPlaying ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-          </button>
-
           {/* Textbook & Tools Drawer Toggle */}
           <button
             onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-serif flex items-center gap-1.5 transition-all border ${
+            className={`min-h-[38px] min-w-[38px] px-2.5 sm:px-3 py-1 rounded-xl text-xs font-serif flex items-center justify-center gap-1.5 transition-all border ${
               isDrawerOpen
                 ? 'bg-amber-500 text-gray-950 font-bold border-amber-400 shadow-md'
                 : 'bg-gray-900 border-gray-800 text-amber-300 hover:bg-gray-800'
@@ -580,201 +530,219 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
             title="Open Textbook & Astronomical Curriculum Drawer"
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">کتاب الہیئۃ والآلات</span>
+            <span className="hidden sm:inline">کتاب الہیئۃ</span>
           </button>
         </div>
       </header>
 
       {/* =================================================================== */}
-      {/* 2. DATE & TIME SELECTOR MODAL / POPOVER */}
+      {/* 2. DATE & TIME SELECTOR MODAL / SHEET */}
       {/* Allows user to select exact Date & Time, step forward/back, or pick equinoxes */}
       {/* =================================================================== */}
-      {isDateTimeModalOpen && (
-        <div className="pointer-events-auto fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-xl bg-gray-950 border border-amber-500/50 rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-amber-400" />
-                <div>
-                  <h3 className="font-serif font-bold text-base text-amber-300">
-                    انتخابِ تاریخ و وقت (Select Date & Time)
-                  </h3>
-                  <p className="text-[11px] text-gray-400">
-                    All rotations and positions are calculated with exact spherical astronomy algorithms.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsDateTimeModalOpen(false)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-900"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* Direct Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-900/60 p-3.5 rounded-xl border border-gray-800">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                  <span>تاریخ (Gregorian Date):</span>
-                </label>
-                <input
-                  type="date"
-                  value={dateInfo.formattedDate}
-                  onChange={(e) => handleCustomDateChange(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-amber-300 font-mono focus:outline-none focus:border-amber-500"
-                />
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-amber-400" />
-                  <span>وقت (Time UTC):</span>
-                </label>
-                <input
-                  type="time"
-                  value={dateInfo.formattedTime}
-                  onChange={(e) => handleCustomTimeChange(e.target.value)}
-                  className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-amber-300 font-mono focus:outline-none focus:border-amber-500"
-                />
+      {/* =================================================================== */}
+      {/* 3. FLOATING INSPECTION TOAST (MOBILE & QUICK ACCESS) */}
+      {/* Appears when user taps an object in 3D and drawer is closed */}
+      {/* =================================================================== */}
+      {inspectedSphere && !isDrawerOpen && (
+        <div className="pointer-events-auto fixed bottom-20 sm:bottom-22 left-2 right-2 sm:left-auto sm:right-6 sm:w-80 z-30 bg-gray-950/95 backdrop-blur-xl border border-amber-500/50 rounded-2xl p-3 shadow-2xl space-y-2 animate-in fade-in slide-in-from-bottom-2">
+          <div className="flex items-center justify-between border-b border-gray-800 pb-1.5">
+            <div className="flex items-center gap-2">
+              <span
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ backgroundColor: inspectedSphere.bodyColor }}
+              />
+              <div>
+                <h4 className="font-serif font-bold text-sm text-amber-300">
+                  {inspectedSphere.nameAr}
+                </h4>
+                <p className="text-[11px] text-gray-400">{inspectedSphere.nameEn}</p>
               </div>
             </div>
+            <button
+              onClick={onClearInspectedSphere}
+              className="min-h-[32px] min-w-[32px] flex items-center justify-center rounded-lg text-gray-400 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            {/* Step Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-900/40 rounded-xl border border-gray-800 text-xs">
-              <span className="text-gray-400 font-mono text-[11px]">قدماتِ زمانی (Time Steps):</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleStepDays(-30)}
-                  className="px-2 py-1 bg-gray-900 hover:bg-gray-800 text-gray-300 rounded font-mono"
-                >
-                  -30d
-                </button>
-                <button
-                  onClick={() => handleStepDays(-1)}
-                  className="px-2 py-1 bg-gray-900 hover:bg-gray-800 text-gray-300 rounded font-mono"
-                >
-                  -1d
-                </button>
-                <button
-                  onClick={() => handleStepHours(-1)}
-                  className="px-2 py-1 bg-gray-900 hover:bg-gray-800 text-gray-300 rounded font-mono"
-                >
-                  -1h
-                </button>
-                <button
-                  onClick={handleSetToNow}
-                  className="px-2.5 py-1 bg-amber-600/30 border border-amber-500/50 text-amber-300 hover:bg-amber-600/50 rounded font-serif font-bold"
-                >
-                  وقتِ حاضر (Now)
-                </button>
-                <button
-                  onClick={() => handleStepHours(1)}
-                  className="px-2 py-1 bg-gray-900 hover:bg-gray-800 text-gray-300 rounded font-mono"
-                >
-                  +1h
-                </button>
-                <button
-                  onClick={() => handleStepDays(1)}
-                  className="px-2 py-1 bg-gray-900 hover:bg-gray-800 text-gray-300 rounded font-mono"
-                >
-                  +1d
-                </button>
-                <button
-                  onClick={() => handleStepDays(30)}
-                  className="px-2 py-1 bg-gray-900 hover:bg-gray-800 text-gray-300 rounded font-mono"
-                >
-                  +30d
-                </button>
-              </div>
-            </div>
+          <div className="flex items-center justify-between text-[11px] font-mono text-gray-400">
+            <span>Sphere #{inspectedSphere.order} of 9</span>
+            <span className="text-amber-300">
+              {inspectedSphere.farghaniDistanceEarthRadii.toLocaleString()} R⊕
+            </span>
+          </div>
 
-            {/* Astronomical Readout Grid */}
-            <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-800 grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px] font-mono">
-              <div>
-                <span className="text-gray-400 block text-[10px]">تاریخِ ہجری (Hijri):</span>
-                <span className="text-emerald-400 font-serif font-bold text-xs">
-                  {hijriDate.formattedStringAr}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[10px]">یومِ جولیان (Julian Day):</span>
-                <span className="text-amber-300 font-bold">{currentJD.toFixed(4)}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[10px]">وقتِ نجومی (Sidereal LST):</span>
-                <span className="text-sky-300 font-bold">{sidereal.lstHoursFormatted} ({sidereal.lstDeg.toFixed(1)}°)</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[10px]">مقامِ شمس (Sun Longitude):</span>
-                <span className="text-amber-400 font-serif font-bold">
-                  {sunEphem.currentSign.ar} ({sunEphem.degreeInSign}°)
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[10px]">میلِ شمس (Sun Declination):</span>
-                <span className="text-amber-300 font-bold">{sunEphem.declinationDeg > 0 ? '+' : ''}{sunEphem.declinationDeg}°</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block text-[10px]">شکلِ قمر (Moon Phase):</span>
-                <span className="text-sky-300 font-serif font-bold">
-                  {moonEphem.phase.ar} ({moonEphem.illuminationPercent}%)
-                </span>
-              </div>
-            </div>
-
-            {/* Quick Historical & Milestone Presets */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300 block font-serif">
-                اہم علاماتِ سالانہ و تاریخی رصدیں (Equinoxes & Historic Epochs):
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
-                {ASTRONOMICAL_DATE_PRESETS.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => handleApplyPreset(p.jd)}
-                    className="p-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-amber-500/50 text-left transition-all group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-serif font-bold text-amber-300 text-xs group-hover:text-amber-200">
-                        {p.nameUr}
-                      </span>
-                      <span className="text-[10px] text-gray-500 font-mono">
-                        JD {p.jd.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-gray-400 line-clamp-1 mt-0.5">
-                      {p.description}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Close Button */}
-            <div className="flex justify-end pt-2 border-t border-gray-800">
-              <button
-                onClick={() => setIsDateTimeModalOpen(false)}
-                className="px-4 py-1.5 rounded-xl bg-amber-500 text-gray-950 font-bold font-serif text-xs hover:bg-amber-400 transition-colors"
-              >
-                ٹھیک ہے (Done)
-              </button>
-            </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => {
+                setIsDrawerOpen(true);
+                setDrawerTab('spheres');
+              }}
+              className="flex-1 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 rounded-xl text-amber-300 font-serif text-xs text-center transition-colors min-h-[36px] flex items-center justify-center"
+            >
+              مزید تفصیلات (View in Drawer)
+            </button>
+            <button
+              onClick={() => setCameraView(inspectedSphere.id)}
+              className="px-3 py-1.5 bg-gray-900 border border-gray-800 rounded-xl text-gray-300 font-serif text-xs text-center hover:text-amber-300 transition-colors min-h-[36px] flex items-center justify-center"
+            >
+              کیمرہ
+            </button>
           </div>
         </div>
       )}
 
       {/* =================================================================== */}
-      {/* 3. BOTTOM FLOATING TRANSPORT CONTROL BAR */}
-      {/* Clean, mathematical controls with direct Date/Time & speed adjustments */}
+      {/* 4. BOTTOM FLOATING TRANSPORT CONTROL BAR */}
+      {/* Responsive: Clean ergonomic mobile dock on <md, full toolbar on md+ */}
       {/* =================================================================== */}
-      <div className="pointer-events-auto mx-auto mb-4 z-10 flex flex-wrap items-center justify-center gap-2 bg-gray-950/90 backdrop-blur-xl border border-amber-600/40 px-3 py-1.5 rounded-2xl shadow-2xl text-xs">
+      
+      {/* MOBILE COMPACT DOCK (<md) */}
+      <div className="pointer-events-auto flex md:hidden flex-col w-[calc(100vw-16px)] max-w-md mx-auto mb-2 pb-safe z-20">
+        {/* Mobile Secondary Expandable Row */}
+        {isMobileSecondaryOpen && (
+          <div className="mb-1.5 bg-gray-950/95 backdrop-blur-xl border border-amber-600/30 rounded-2xl p-2 shadow-2xl flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono px-1">
+              <span>قدماتِ اضافی (Extra Steps):</span>
+              <button
+                onClick={handleSetToNow}
+                className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-serif"
+              >
+                وقتِ حاضر (Now)
+              </button>
+            </div>
+            
+            <div className="flex items-center justify-between gap-1 text-xs font-mono">
+              <button
+                onClick={() => handleStepDays(-30)}
+                className="flex-1 py-1 bg-gray-900 border border-gray-800 text-gray-300 rounded-lg text-center"
+              >
+                -30d
+              </button>
+              <button
+                onClick={() => handleStepHours(-1)}
+                className="flex-1 py-1 bg-gray-900 border border-gray-800 text-gray-300 rounded-lg text-center"
+              >
+                -1h
+              </button>
+              <button
+                onClick={() => handleStepHours(1)}
+                className="flex-1 py-1 bg-gray-900 border border-gray-800 text-gray-300 rounded-lg text-center"
+              >
+                +1h
+              </button>
+              <button
+                onClick={() => handleStepDays(30)}
+                className="flex-1 py-1 bg-gray-900 border border-gray-800 text-gray-300 rounded-lg text-center"
+              >
+                +30d
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-800 text-xs font-serif">
+              <span className="text-[10px] text-gray-400 font-mono pl-1">Focus:</span>
+              <button
+                onClick={() => setCameraView('EARTH_CLOSE')}
+                className="flex-1 py-1 bg-gray-900/90 border border-gray-800 rounded-lg text-gray-300 hover:text-amber-300 flex items-center justify-center gap-1"
+              >
+                <span>🌍</span>
+                <span>الأرض</span>
+              </button>
+              <button
+                onClick={() => setCameraView('sun')}
+                className="flex-1 py-1 bg-gray-900/90 border border-gray-800 rounded-lg text-gray-300 hover:text-amber-300 flex items-center justify-center gap-1"
+              >
+                <span>☉</span>
+                <span>الشمس</span>
+              </button>
+              <button
+                onClick={() => setCameraView('MOON_PHASE')}
+                className="flex-1 py-1 bg-gray-900/90 border border-gray-800 rounded-lg text-gray-300 hover:text-amber-300 flex items-center justify-center gap-1"
+              >
+                <span>🌙</span>
+                <span>القمر</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Main Row */}
+        <div className="bg-gray-950/95 backdrop-blur-2xl border border-amber-600/40 rounded-2xl p-1.5 shadow-2xl flex items-center justify-between gap-1">
+          {/* Play / Pause Toggle (44px target) */}
+          <button
+            onClick={() => onUpdateState({ isPaused: !simState.isPaused })}
+            className={`min-h-[44px] min-w-[44px] rounded-xl flex items-center justify-center transition-all shadow-md active:scale-95 ${
+              simState.isPaused
+                ? 'bg-gray-900 border border-gray-800 text-amber-300'
+                : 'bg-amber-500 text-gray-950 font-bold'
+            }`}
+            title={simState.isPaused ? 'Resume Motion' : 'Pause Motion'}
+          >
+            {simState.isPaused ? <Play className="w-5 h-5 fill-current" /> : <Pause className="w-5 h-5 fill-current" />}
+          </button>
+
+          {/* Steppers: -1d and +1d (44px target) */}
+          <button
+            onClick={() => handleStepDays(-1)}
+            className="min-h-[44px] px-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 active:bg-gray-700 border border-gray-800 text-gray-300 font-mono text-xs flex items-center justify-center active:scale-95"
+            title="Step back 1 day"
+          >
+            -1d
+          </button>
+          <button
+            onClick={() => handleStepDays(1)}
+            className="min-h-[44px] px-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 active:bg-gray-700 border border-gray-800 text-gray-300 font-mono text-xs flex items-center justify-center active:scale-95"
+            title="Step forward 1 day"
+          >
+            +1d
+          </button>
+
+          {/* Speed Cycler: Cycles 1x -> 1m/s -> 1h/s -> 1d/s -> 10d/s */}
+          <button
+            onClick={cycleSpeed}
+            className="min-h-[44px] px-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 active:bg-gray-700 border border-gray-800 text-amber-400 font-mono text-xs flex items-center justify-center gap-1 active:scale-95"
+            title={`Speed: ${currentSpeedLabel}. Tap to cycle speed.`}
+          >
+            <Zap className="w-3.5 h-3.5 fill-current text-amber-400" />
+            <span className="font-bold">{currentSpeedLabel}</span>
+          </button>
+
+          {/* Secondary Controls Expander */}
+          <button
+            onClick={() => setIsMobileSecondaryOpen(!isMobileSecondaryOpen)}
+            className={`min-h-[44px] min-w-[34px] rounded-xl border flex items-center justify-center transition-colors ${
+              isMobileSecondaryOpen
+                ? 'bg-amber-500/20 border-amber-500/60 text-amber-300'
+                : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'
+            }`}
+            title="Toggle extra time steps & focus"
+          >
+            {isMobileSecondaryOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+          </button>
+
+          {/* Drawer Quick Button */}
+          <button
+            onClick={() => {
+              setIsDrawerOpen(true);
+              setDrawerTab('textbook');
+            }}
+            className="min-h-[44px] min-w-[44px] rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 hover:bg-amber-500/25 active:scale-95 flex items-center justify-center shadow"
+            title="Open Textbook Drawer"
+          >
+            <BookOpen className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* DESKTOP FULL TOOLBAR (md+) */}
+      <div className="pointer-events-auto hidden md:flex mx-auto mb-4 z-10 flex-wrap items-center justify-center gap-2 bg-gray-950/90 backdrop-blur-xl border border-amber-600/40 px-3 py-1.5 rounded-2xl shadow-2xl text-xs">
         {/* Play / Pause Toggle */}
         <button
           onClick={() => onUpdateState({ isPaused: !simState.isPaused })}
-          className="p-1.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-amber-300 transition-colors"
+          className="p-1.5 rounded-lg bg-gray-900 hover:bg-gray-800 text-amber-300 transition-colors min-h-[36px] min-w-[36px] flex items-center justify-center"
           title={simState.isPaused ? 'Resume Motion' : 'Pause Motion'}
         >
           {simState.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
@@ -784,28 +752,28 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
         <div className="flex items-center gap-0.5 px-1 border-l border-gray-800">
           <button
             onClick={() => handleStepHours(-1)}
-            className="px-1.5 py-0.5 text-[10px] font-mono text-gray-400 hover:text-white rounded hover:bg-gray-900"
+            className="px-1.5 py-1 text-[10px] font-mono text-gray-400 hover:text-white rounded hover:bg-gray-900 min-h-[32px]"
             title="Step back 1 hour"
           >
             -1h
           </button>
           <button
             onClick={() => handleStepHours(1)}
-            className="px-1.5 py-0.5 text-[10px] font-mono text-gray-400 hover:text-white rounded hover:bg-gray-900"
+            className="px-1.5 py-1 text-[10px] font-mono text-gray-400 hover:text-white rounded hover:bg-gray-900 min-h-[32px]"
             title="Step forward 1 hour"
           >
             +1h
           </button>
           <button
             onClick={() => handleStepDays(-1)}
-            className="px-1.5 py-0.5 text-[10px] font-mono text-gray-400 hover:text-white rounded hover:bg-gray-900"
+            className="px-1.5 py-1 text-[10px] font-mono text-gray-400 hover:text-white rounded hover:bg-gray-900 min-h-[32px]"
             title="Step back 1 day"
           >
             -1d
           </button>
           <button
             onClick={() => handleStepDays(1)}
-            className="px-1.5 py-0.5 text-[10px] font-mono text-gray-400 hover:text-white rounded hover:bg-gray-900"
+            className="px-1.5 py-1 text-[10px] font-mono text-gray-400 hover:text-white rounded hover:bg-gray-900 min-h-[32px]"
             title="Step forward 1 day"
           >
             +1d
@@ -814,17 +782,11 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
 
         {/* Simulation Speed Multipliers (Real seconds of sky motion) */}
         <div className="flex items-center gap-1 px-1 border-x border-gray-800">
-          {[
-            { label: '1x', val: 1 },
-            { label: '1m/s', val: 60 },
-            { label: '1h/s', val: 3600 },
-            { label: '1d/s', val: 86400 },
-            { label: '10d/s', val: 864000 },
-          ].map((spd) => (
+          {SPEEDS.map((spd) => (
             <button
               key={spd.val}
               onClick={() => onUpdateState({ timeSpeed: spd.val })}
-              className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono transition-colors ${
+              className={`px-2 py-1 rounded-md text-[10px] font-mono transition-colors min-h-[32px] ${
                 simState.timeSpeed === spd.val
                   ? 'bg-amber-500 text-gray-950 font-bold'
                   : 'text-gray-400 hover:text-white'
@@ -839,10 +801,10 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
         {/* Quick Date Display / Picker Trigger */}
         <button
           onClick={() => setIsDateTimeModalOpen(true)}
-          className="px-2 py-1 rounded-md bg-gray-900 hover:bg-gray-800 border border-gray-800 text-amber-300 font-mono text-xs flex items-center gap-1.5"
+          className="px-2.5 py-1 rounded-md bg-gray-900 hover:bg-gray-800 border border-gray-800 text-amber-300 font-mono text-xs flex items-center gap-1.5 min-h-[32px]"
           title="Open Date & Time selection modal"
         >
-          <Calendar className="w-3 h-3 text-amber-400" />
+          <Calendar className="w-3.5 h-3.5 text-amber-400" />
           <span>{dateInfo.formattedDate}</span>
           <span className="text-gray-500">{dateInfo.formattedTime}</span>
         </button>
@@ -851,27 +813,27 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
         <div className="flex items-center gap-1 px-1 border-l border-gray-800">
           <button
             onClick={() => setCameraView('EARTH_CLOSE')}
-            className="px-2 py-1 rounded-md text-gray-300 hover:text-amber-300 hover:bg-gray-900 text-xs font-serif flex items-center gap-1"
+            className="px-2 py-1 rounded-md text-gray-300 hover:text-amber-300 hover:bg-gray-900 text-xs font-serif flex items-center gap-1 min-h-[32px]"
             title="Focus Earth (مرکزِ زمین)"
           >
             <span>🌍</span>
-            <span className="hidden md:inline">الأرض</span>
+            <span>الأرض</span>
           </button>
           <button
             onClick={() => setCameraView('sun')}
-            className="px-2 py-1 rounded-md text-gray-300 hover:text-amber-300 hover:bg-gray-900 text-xs font-serif flex items-center gap-1"
+            className="px-2 py-1 rounded-md text-gray-300 hover:text-amber-300 hover:bg-gray-900 text-xs font-serif flex items-center gap-1 min-h-[32px]"
             title="Focus Sun (الشمس)"
           >
             <span>☉</span>
-            <span className="hidden md:inline">الشمس</span>
+            <span>الشمس</span>
           </button>
           <button
             onClick={() => setCameraView('MOON_PHASE')}
-            className="px-2 py-1 rounded-md text-gray-300 hover:text-amber-300 hover:bg-gray-900 text-xs font-serif flex items-center gap-1"
+            className="px-2 py-1 rounded-md text-gray-300 hover:text-amber-300 hover:bg-gray-900 text-xs font-serif flex items-center gap-1 min-h-[32px]"
             title="Focus Moon (القمر)"
           >
             <span>🌙</span>
-            <span className="hidden md:inline">القمر</span>
+            <span>القمر</span>
           </button>
         </div>
 
@@ -881,29 +843,30 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
             setIsDrawerOpen(true);
             setDrawerTab('textbook');
           }}
-          className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 text-xs font-serif flex items-center gap-1"
+          className="px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 text-xs font-serif flex items-center gap-1 min-h-[32px]"
         >
           <span>📚 درسِ کتاب</span>
         </button>
       </div>
 
       {/* =================================================================== */}
-      {/* 4. SLIDE-OVER RIGHT DRAWER: TEXTBOOK, 9 SPHERES, EPHEMERIS & SCHOLAR */}
+      {/* 5. SLIDE-OVER RIGHT DRAWER: TEXTBOOK, 9 SPHERES, EPHEMERIS & SCHOLAR */}
+      {/* Responsive: Full-screen modal drawer on mobile, 450px sidebar on sm+ */}
       {/* =================================================================== */}
       {isDrawerOpen && (
-        <aside className="pointer-events-auto absolute top-14 right-0 bottom-0 w-full sm:w-[450px] bg-gray-950/95 backdrop-blur-2xl border-l border-amber-600/30 shadow-2xl flex flex-col z-30 transition-transform duration-300">
+        <aside className="pointer-events-auto fixed inset-0 sm:inset-auto sm:top-14 sm:right-0 sm:bottom-0 w-full sm:w-[450px] bg-gray-950/98 backdrop-blur-2xl border-l border-amber-600/30 shadow-2xl flex flex-col z-40 transition-transform duration-300 pt-safe pb-safe">
           {/* Drawer Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
             <div>
               <h2 className="font-serif font-bold text-base text-amber-300">کتاب الہیئۃ والافلاکیات</h2>
               <p className="text-[11px] text-gray-400">Classical Geocentric Curriculum & Controls</p>
             </div>
             <button
               onClick={() => setIsDrawerOpen(false)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+              className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
               title="Close Drawer"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </button>
           </div>
 
@@ -948,7 +911,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
           )}
 
           {/* Tab Navigation */}
-          <div className="flex items-center px-4 pt-3 border-b border-gray-800 gap-1 overflow-x-auto text-xs">
+          <div className="flex items-center px-3 pt-2 border-b border-gray-800 gap-1 overflow-x-auto touch-pan-x scrollbar-none text-xs flex-shrink-0">
             {[
               { id: 'textbook', labelUr: 'درسِ کتاب', labelEn: 'Textbook', icon: BookOpen },
               { id: 'ephemeris', labelUr: 'اوقات و تقویم', labelEn: 'Ephemeris', icon: Calendar },
@@ -961,7 +924,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                 <button
                   key={tab.id}
                   onClick={() => setDrawerTab(tab.id as DrawerTab)}
-                  className={`pb-2 px-2.5 font-serif transition-colors flex items-center gap-1.5 whitespace-nowrap border-b-2 ${
+                  className={`min-h-[44px] pb-2 px-3 font-serif transition-colors flex items-center gap-1.5 whitespace-nowrap border-b-2 ${
                     drawerTab === tab.id
                       ? 'border-amber-400 text-amber-300 font-bold'
                       : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -991,12 +954,12 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                 </div>
 
                 {/* Chapter Selector */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-1">
+                <div className="flex items-center gap-1.5 overflow-x-auto touch-pan-x scrollbar-none pb-1">
                   {TEXTBOOK_CHAPTERS.map((ch) => (
                     <button
                       key={ch.number}
                       onClick={() => setActiveChapter(ch.number)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-serif transition-all whitespace-nowrap border ${
+                      className={`min-h-[40px] px-3.5 py-1.5 rounded-xl text-xs font-serif transition-all whitespace-nowrap border flex items-center justify-center ${
                         activeChapter === ch.number
                           ? 'bg-amber-500 text-gray-950 font-bold border-amber-400 shadow'
                           : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white'
@@ -1042,7 +1005,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                       <div className="pt-2">
                         <button
                           onClick={ch.setup}
-                          className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-serif font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-md"
+                          className="w-full h-12 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-98 text-white font-serif font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 shadow-md"
                         >
                           <span>اس سبق کا منظر اور کیمرہ سیٹ کریں</span>
                         </button>
@@ -1053,21 +1016,47 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
               </div>
             )}
 
-            {/* TAB 2: LIVE EPHEMERIS & DATE/TIME */}
-            {drawerTab === 'ephemeris' && (
-              <div className="space-y-3">
-                <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-serif font-bold text-amber-300 text-xs">
-                      وقت و تقویم (Time & Calendar):
-                    </span>
-                    <button
-                      onClick={() => setIsDateTimeModalOpen(true)}
-                      className="text-[11px] text-amber-400 hover:underline"
-                    >
-                      تبدیل کریں (Change)
-                    </button>
+
+                {/* Date & Time Selector */}
+                <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-800 space-y-3">
+                  <h4 className="font-serif font-bold text-amber-300 text-sm">انتخابِ تاریخ و وقت</h4>
+                  
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-400">تاریخ (Gregorian):</label>
+                      <input
+                        type="date"
+                        value={dateInfo.formattedDate}
+                        onChange={(e) => handleCustomDateChange(e.target.value)}
+                        className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-amber-300 font-mono focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-400">وقت (UTC):</label>
+                      <input
+                        type="time"
+                        value={dateInfo.formattedTime}
+                        onChange={(e) => handleCustomTimeChange(e.target.value)}
+                        className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-sm text-amber-300 font-mono focus:outline-none"
+                      />
+                    </div>
                   </div>
+
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <button onClick={() => handleStepDays(-30)} className="px-2 py-1 bg-gray-800 rounded text-xs font-mono">-30d</button>
+                    <button onClick={() => handleStepDays(-1)} className="px-2 py-1 bg-gray-800 rounded text-xs font-mono">-1d</button>
+                    <button onClick={() => handleStepHours(-1)} className="px-2 py-1 bg-gray-800 rounded text-xs font-mono">-1h</button>
+                    <button onClick={handleSetToNow} className="px-2 py-1 bg-amber-600/30 rounded text-xs font-serif font-bold">Now</button>
+                    <button onClick={() => handleStepHours(1)} className="px-2 py-1 bg-gray-800 rounded text-xs font-mono">+1h</button>
+                    <button onClick={() => handleStepDays(1)} className="px-2 py-1 bg-gray-800 rounded text-xs font-mono">+1d</button>
+                    <button onClick={() => handleStepDays(30)} className="px-2 py-1 bg-gray-800 rounded text-xs font-mono">+30d</button>
+                  </div>
+                </div>
+
+                <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-800 space-y-2">
+                  <span className="font-serif font-bold text-amber-300 text-xs">
+                    اوقات و تقویم:
+                  </span>
 
                   <div className="space-y-1 text-[11px] font-mono">
                     <div className="flex justify-between py-1 border-b border-gray-800">
@@ -1076,18 +1065,17 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                     </div>
                     <div className="flex justify-between py-1 border-b border-gray-800">
                       <span className="text-gray-400">تاریخِ ہجری (Hijri):</span>
-                      <span className="text-emerald-400 font-serif font-bold">{hijriDate.formattedStringAr}</span>
+                      <span className="text-emerald-400 font-bold">{hijriDate.formattedStringAr}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-gray-800">
-                      <span className="text-gray-400">Julian Day Number:</span>
-                      <span className="text-gray-200">{currentJD.toFixed(4)}</span>
+                      <span className="text-gray-400">یومِ جولیان (JD):</span>
+                      <span className="text-amber-300 font-bold">{currentJD.toFixed(4)}</span>
                     </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-gray-400">Local Sidereal (LST):</span>
-                      <span className="text-sky-300 font-bold">{sidereal.lstHoursFormatted} ({sidereal.lstDeg.toFixed(2)}°)</span>
+                    <div className="flex justify-between py-1 border-b border-gray-800">
+                      <span className="text-gray-400">وقتِ نجومی (LST):</span>
+                      <span className="text-sky-300 font-bold">{sidereal.lstHoursFormatted}</span>
                     </div>
-                  </div>
-                </div>
+
 
                 {/* Solar Ephemeris Card */}
                 <div className="bg-gray-900/80 p-3 rounded-xl border border-gray-800 space-y-1.5">
@@ -1294,7 +1282,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px]">
+                <div className="flex items-center gap-1.5 overflow-x-auto touch-pan-x scrollbar-none pb-1.5 text-[11px]">
                   {[
                     'Explain diurnal motion of Falak al-Atlas.',
                     'How does 23.44° Ecliptic tilt create seasons?',
@@ -1303,7 +1291,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                     <button
                       key={i}
                       onClick={() => handleAskScholar(pText)}
-                      className="flex-shrink-0 px-2 py-1 rounded-full bg-gray-900 border border-gray-800 text-gray-300 hover:text-amber-300 transition-colors text-[10px]"
+                      className="flex-shrink-0 min-h-[34px] px-3 py-1 rounded-full bg-gray-900 border border-gray-800 text-gray-300 hover:text-amber-300 active:bg-gray-800 transition-colors text-[11px] font-mono flex items-center"
                     >
                       {pText}
                     </button>
@@ -1313,7 +1301,7 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                 <div className="bg-gray-900/90 rounded-xl border border-gray-800 p-3 max-h-56 overflow-y-auto leading-relaxed text-gray-200 font-serif">
                   {isQueryingScholar ? (
                     <div className="flex items-center gap-2 text-amber-300 py-3 text-xs">
-                      <span className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                      <span className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
                       <span>قدیم افلاکی کتب کی تحقیق جاری ہے...</span>
                     </div>
                   ) : (
@@ -1326,21 +1314,22 @@ Fixed stars are distant pinpoints on the 8th sphere, not solid bodies.`;
                     e.preventDefault();
                     handleAskScholar();
                   }}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 pt-1"
                 >
                   <input
                     type="text"
                     value={scholarPrompt}
                     onChange={(e) => setScholarPrompt(e.target.value)}
                     placeholder="حرکتِ یومیہ، میلِ کلی، اشکالِ قمر پر سوال پوچھیں..."
-                    className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-100 placeholder-gray-500 focus:outline-none focus:border-amber-500 font-serif"
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-amber-500 font-serif h-11"
                   />
                   <button
                     type="submit"
                     disabled={isQueryingScholar || !scholarPrompt.trim()}
-                    className="px-3 py-1.5 rounded-lg bg-amber-600 text-white font-medium text-xs hover:bg-amber-500 disabled:opacity-50 transition-colors"
+                    className="h-11 w-11 min-w-[44px] rounded-xl bg-amber-600 text-white font-medium flex items-center justify-center hover:bg-amber-500 active:scale-95 disabled:opacity-50 transition-all flex-shrink-0 shadow"
+                    title="Send Prompt"
                   >
-                    <Send className="w-3 h-3" />
+                    <Send className="w-4 h-4" />
                   </button>
                 </form>
               </div>

@@ -98,8 +98,34 @@ export interface ScholarTreatise {
   geometricTheorem: string;
 }
 
+export type CosmologyMode = 'REALISTIC_PHYSICAL' | 'CLASSICAL_GEOCENTRIC';
+export type ScaleMode = 'LOGARITHMIC_BALANCED' | 'TRUE_AU_SCALE';
+
+export interface RealisticPlanetData {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+  nameUr: string;
+  massKg: string;
+  massKgNumeric: number;
+  massEarthRelative: number;
+  distanceKm: string;
+  distanceKmNumeric: number;
+  distanceAU: number;
+  orbitalPeriodDays: number;
+  orbitalVelocityKmS: number;
+  color: string;
+  diameterKm: number;
+  axialTiltDeg: number;
+  description: string;
+  isMoon?: boolean;
+  parentBodyId?: string;
+}
+
 export interface SimulationState {
   modelType: ModelType;
+  cosmologyMode: CosmologyMode;
+  scaleMode: ScaleMode;
   simTimeDays: number;
   simJulianDay: number;
   dateTimeIso: string;
@@ -129,5 +155,6 @@ export interface SimulationState {
   showSolsticeEquinoxMarkers: boolean;
   textbookFocusMode: 'CORE_EARTH_SUN_MOON' | 'ALL_PLANETS';
   showPlanets: boolean;
-  cameraPreset?: 'COSMIC' | 'EARTH_CLOSE' | 'MOON_PHASE' | 'ECLIPTIC_SIDE' | 'POLAR_NORTH' | 'earth' | 'moon' | 'sun' | 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | string | null;
+  showOrbits: boolean;
+  cameraPreset?: 'COSMIC' | 'EARTH_CLOSE' | 'MOON_PHASE' | 'ECLIPTIC_SIDE' | 'POLAR_NORTH' | 'earth' | 'moon' | 'sun' | 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | string | null;
 }

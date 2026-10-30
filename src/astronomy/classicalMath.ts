@@ -718,3 +718,120 @@ export function calculateBattaniPosition(
     trueLongitudeDeg: ((trueLongitude * RAD_TO_DEG) + 360) % 360,
   };
 }
+
+// =============================================================================
+// H. REALISTIC HELIOCENTRIC ASTROPHYSICS & PLANETARY DYNAMICS
+// Based on exact masses and average AU / km distances from the Sun + Earth's Moon
+// =============================================================================
+
+export interface RealisticBodyPosition {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  orbitRadius: number;
+  heliocentricLongitudeDeg: number;
+  orbitalVelocityKmS: number;
+  trueDistanceAU: number;
+  trueDistanceKm: number;
+}
+
+export function calculateRealisticSolarSystemPositions(
+  currentJD: number,
+  scaleMode: 'LOGARITHMIC_BALANCED' | 'TRUE_AU_SCALE' = 'LOGARITHMIC_BALANCED'
+): {
+  planets: RealisticBodyPosition[];
+  moon: RealisticBodyPosition;
+  earthPos: { x: number; y: number; z: number };
+} {
+  const tDays = currentJD - 2451545.0; // Days from J2000.0 epoch
+
+  // Exact planet physical constants from user table
+  const BODIES = [
+    { id: 'mercury', au: 0.39, km: 57.9e6, periodDays: 87.969, epochL: 252.25, vKmS: 47.4, incDeg: 7.00 },
+    { id: 'venus',   au: 0.72, km: 108.2e6, periodDays: 224.701, epochL: 181.98, vKmS: 35.0, incDeg: 3.39 },
+    { id: 'earth',   au: 1.00, km: 149.6e6, periodDays: 365.256, epochL: 100.46, vKmS: 29.8, incDeg: 0.00 },
+    { id: 'mars',    au: 1.52, km: 228.0e6, periodDays: 686.980, epochL: 355.45, vKmS: 24.1, incDeg: 1.85 },
+    { id: 'jupiter', au: 5.20, km: 778.5e6, periodDays: 4332.59, epochL: 34.40,  vKmS: 13.1, incDeg: 1.30 },
+    { id: 'saturn',  au: 9.58, km: 1432.0e6, periodDays: 10759.22, epochL: 49.94, vKmS: 9.7, incDeg: 2.49 },
+    { id: 'uranus',  au: 19.22, km: 2867.0e6, periodDays: 30685.4, epochL: 313.23, vKmS: 6.8, incDeg: 0.77 },
+    { id: 'neptune', au: 30.05, km: 4515.0e6, periodDays: 60189.0, epochL: 304.88, vKmS: 5.4, incDeg: 1.77 },
+  ];
+
+  let earthX = 0;
+  let earthY = 0;
+  let earthZ = 0;
+
+  const planets: RealisticBodyPosition[] = BODIES.map((b) => {
+    // Mean motion: n = 360 / period
+    const meanMotion = 360.0 / b.periodDays;
+    const meanLonDeg = (b.epochL + meanMotion * tDays) % 360;
+    const meanLonRad = meanLonDeg * DEG_TO_RAD;
+    const incRad = b.incDeg * DEG_TO_RAD;
+
+    // Visual distance radius based on scaleMode
+    let rVis: number;
+    if (scaleMode === 'TRUE_AU_SCALE') {
+      rVis = b.au * 14.0;
+    } else {
+      // Balanced logarithmic scale: inner planets spaced clearly, outer planets accessible in single view
+      if (b.au <= 1.0) {
+        rVis = b.au * 12.0;
+      } else {
+        rVis = 12.0 + Math.pow(b.au - 1.0, 0.75) * 8.5;
+      }
+    }
+
+    const x = rVis * Math.cos(meanLonRad);
+    const y = rVis * Math.sin(meanLonRad) * Math.sin(incRad);
+    const z = rVis * Math.sin(meanLonRad) * Math.cos(incRad);
+
+    if (b.id === 'earth') {
+      earthX = x;
+      earthY = y;
+      earthZ = z;
+    }
+
+    return {
+      id: b.id,
+      x,
+      y,
+      z,
+      orbitRadius: rVis,
+      heliocentricLongitudeDeg: (meanLonDeg + 360) % 360,
+      orbitalVelocityKmS: b.vKmS,
+      trueDistanceAU: b.au,
+      trueDistanceKm: b.km,
+    };
+  });
+
+  // Calculate Moon orbiting Earth at average distance ~384,400 km
+  const moonPeriodDays = 27.32166;
+  const moonMeanMotion = 360.0 / moonPeriodDays;
+  const moonLonDeg = (218.32 + moonMeanMotion * tDays) % 360;
+  const moonLonRad = moonLonDeg * DEG_TO_RAD;
+  const moonIncRad = 5.14 * DEG_TO_RAD;
+  const moonOrbitRadiusVis = scaleMode === 'TRUE_AU_SCALE' ? 1.6 : 1.35;
+
+  const moonRelX = moonOrbitRadiusVis * Math.cos(moonLonRad);
+  const moonRelY = moonOrbitRadiusVis * Math.sin(moonLonRad) * Math.sin(moonIncRad);
+  const moonRelZ = moonOrbitRadiusVis * Math.sin(moonLonRad) * Math.cos(moonIncRad);
+
+  const moon: RealisticBodyPosition = {
+    id: 'moon',
+    x: earthX + moonRelX,
+    y: earthY + moonRelY,
+    z: earthZ + moonRelZ,
+    orbitRadius: moonOrbitRadiusVis,
+    heliocentricLongitudeDeg: moonLonDeg,
+    orbitalVelocityKmS: 1.022,
+    trueDistanceAU: 1.00,
+    trueDistanceKm: 384400,
+  };
+
+  return {
+    planets,
+    moon,
+    earthPos: { x: earthX, y: earthY, z: earthZ },
+  };
+}

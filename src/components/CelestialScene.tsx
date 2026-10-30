@@ -9,12 +9,14 @@ import {
 import {
   NINE_SPHERES_DATA,
   LUNAR_MANSIONS_DATA,
+  REALISTIC_SOLAR_SYSTEM_DATA,
 } from '../astronomy/celestialData';
 import {
   calculateSiderealTime,
   calculateSunEphemerisByJD,
   calculateMoonEphemerisByJD,
   calculatePlanetsPositionsByJD,
+  calculateRealisticSolarSystemPositions,
   calculateTusiCouple,
   calculateIbnShatirPosition,
   calculateBattaniPosition,
@@ -32,6 +34,8 @@ import {
   createJupiterTexture,
   createSaturnTexture,
   createSaturnRingTexture,
+  createUranusTexture,
+  createNeptuneTexture,
 } from '../astronomy/proceduralTextures';
 
 interface CelestialSceneProps {
@@ -141,6 +145,8 @@ export const CelestialScene: React.FC<CelestialSceneProps> = ({
     const jupiterTexture = createJupiterTexture();
     const saturnTexture = createSaturnTexture();
     const saturnRingTexture = createSaturnRingTexture();
+    const uranusTexture = createUranusTexture();
+    const neptuneTexture = createNeptuneTexture();
 
     const polishedGoldMat = new THREE.MeshPhysicalMaterial({
       color: '#d4af37',
@@ -156,11 +162,13 @@ export const CelestialScene: React.FC<CelestialSceneProps> = ({
     });
 
     // =========================================================================
-    // 5. STATIONARY EARTH (زمین ساکن) AT THE EXACT WORLD CENTER (0, 0, 0)
-    // Strictly geocentric: Earth is outside falakAtlasGroup and does not rotate.
+    // 5. GEOCENTRIC ROOT CONTAINER (حامل النموذج البطلمي والكرات التسع)
     // =========================================================================
+    const geocentricRootGroup = new THREE.Group();
+    scene.add(geocentricRootGroup);
+
     const earthGroup = new THREE.Group();
-    scene.add(earthGroup);
+    geocentricRootGroup.add(earthGroup);
 
     // Earth Globe (MeshStandardMaterial reacting purely to Sun's light: 50% day, 50% night)
     const earthGeo = new THREE.SphereGeometry(1.6, 64, 32);
@@ -245,7 +253,7 @@ export const CelestialScene: React.FC<CelestialSceneProps> = ({
     // ALL inner celestial groups are parented inside this container!
     // =========================================================================
     const falakAtlasGroup = new THREE.Group();
-    scene.add(falakAtlasGroup);
+    geocentricRootGroup.add(falakAtlasGroup);
 
     const SPHERE_RADIUS = 32.0;
     const epsRad = 23.44 * DEG_TO_RAD;
@@ -723,6 +731,197 @@ const planetaryNodes: PlanetaryNode[] = [];
     falakAtlasGroup.add(starFieldPoints);
 
     // =========================================================================
+    // 6.5 REALISTIC PHYSICAL HELIOCENTRIC SOLAR SYSTEM (النظام الشمسي الحقيقي)
+    // Central radiant Sun at (0,0,0) + 8 Keplerian Planets + Moon at ~384,400 km
+    // =========================================================================
+    const realisticSolarSystemGroup = new THREE.Group();
+    scene.add(realisticSolarSystemGroup);
+
+    // 1. Central radiant Sun (Heliocentric Center)
+    const realSunMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(2.2, 36, 36),
+      new THREE.MeshBasicMaterial({ color: '#fffdf5' })
+    );
+    realSunMesh.userData = { id: 'sun' };
+    realisticSolarSystemGroup.add(realSunMesh);
+
+    const realSunSpriteMat = new THREE.SpriteMaterial({
+      map: sunGlowTexture,
+      color: '#f59e0b',
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const realSunSprite = new THREE.Sprite(realSunSpriteMat);
+    realSunSprite.scale.set(10.5, 10.5, 1);
+    realSunMesh.add(realSunSprite);
+
+    const realSunLight = new THREE.PointLight('#fffbeb', 6.0, 3000, 0.08);
+    realSunLight.castShadow = true;
+    realSunLight.shadow.mapSize.width = 2048;
+    realSunLight.shadow.mapSize.height = 2048;
+    realSunLight.shadow.camera.near = 0.5;
+    realSunLight.shadow.camera.far = 2500;
+    realSunLight.shadow.bias = -0.0005;
+    realSunMesh.add(realSunLight);
+
+    // 2. Planets definitions & meshes
+    interface RealPlanetNode {
+      id: string;
+      mesh: THREE.Mesh;
+      group: THREE.Group;
+      tiltGroup: THREE.Group;
+      orbitLine: THREE.Line;
+      axialTiltDeg: number;
+      rotationPeriodDays: number;
+    }
+
+    const realPlanetNodes: RealPlanetNode[] = [];
+
+    // Unit circle geometry reused for orbit lines (scaled dynamically by orbit radius)
+    const createOrbitLine = (color: string) => {
+      const pts: THREE.Vector3[] = [];
+      const segs = 144;
+      for (let i = 0; i <= segs; i++) {
+        const a = (i / segs) * Math.PI * 2;
+        pts.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+      });
+      return new THREE.Line(geo, mat);
+    };
+
+    const realisticBodiesConfig = [
+      { id: 'mercury', radius: 0.32, texture: mercuryTexture, tilt: 0.03, rotPeriod: 58.65, color: '#94a3b8' },
+      { id: 'venus',   radius: 0.48, texture: venusTexture,   tilt: 177.3, rotPeriod: -243.0, color: '#fef08a' },
+      { id: 'earth',   radius: 0.52, texture: earthTexture,   tilt: 23.44, rotPeriod: 1.0, color: '#38bdf8' },
+      { id: 'mars',    radius: 0.38, texture: marsTexture,    tilt: 25.19, rotPeriod: 1.026, color: '#ef4444' },
+      { id: 'jupiter', radius: 1.25, texture: jupiterTexture, tilt: 3.13,  rotPeriod: 0.413, color: '#fb923c' },
+      { id: 'saturn',  radius: 1.05, texture: saturnTexture,  tilt: 26.73, rotPeriod: 0.444, color: '#fde047' },
+      { id: 'uranus',  radius: 0.72, texture: uranusTexture,  tilt: 97.77, rotPeriod: -0.718, color: '#67e8f9' },
+      { id: 'neptune', radius: 0.70, texture: neptuneTexture, tilt: 28.32, rotPeriod: 0.671, color: '#3b82f6' },
+    ];
+
+    const realOrbitGroup = new THREE.Group();
+    realisticSolarSystemGroup.add(realOrbitGroup);
+
+    realisticBodiesConfig.forEach((cfg) => {
+      const pGroup = new THREE.Group();
+      realisticSolarSystemGroup.add(pGroup);
+
+      const tiltGroup = new THREE.Group();
+      tiltGroup.rotation.z = cfg.tilt * DEG_TO_RAD;
+      pGroup.add(tiltGroup);
+
+      const pMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(cfg.radius, 40, 40),
+        new THREE.MeshStandardMaterial({
+          map: cfg.texture,
+          roughness: cfg.id === 'venus' ? 0.35 : 0.65,
+          metalness: 0.08,
+        })
+      );
+      pMesh.castShadow = true;
+      pMesh.receiveShadow = true;
+      pMesh.userData = { id: cfg.id };
+      tiltGroup.add(pMesh);
+
+      // Saturn Rings
+      if (cfg.id === 'saturn') {
+        const saturnRingGeo = new THREE.RingGeometry(1.35, 2.5, 64);
+        const saturnRingMat = new THREE.MeshStandardMaterial({
+          map: saturnRingTexture,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.95,
+          roughness: 0.4,
+        });
+        const ringMesh = new THREE.Mesh(saturnRingGeo, saturnRingMat);
+        ringMesh.rotation.x = Math.PI / 2;
+        ringMesh.receiveShadow = true;
+        tiltGroup.add(ringMesh);
+      }
+
+      // Uranus faint Ring
+      if (cfg.id === 'uranus') {
+        const uranusRingGeo = new THREE.RingGeometry(0.95, 1.25, 48);
+        const uranusRingMat = new THREE.MeshStandardMaterial({
+          color: '#bae6fd',
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.45,
+          roughness: 0.5,
+        });
+        const uRingMesh = new THREE.Mesh(uranusRingGeo, uranusRingMat);
+        uRingMesh.rotation.x = Math.PI / 2;
+        tiltGroup.add(uRingMesh);
+      }
+
+      // Orbit Line
+      const orbitLine = createOrbitLine(cfg.color);
+      realOrbitGroup.add(orbitLine);
+
+      realPlanetNodes.push({
+        id: cfg.id,
+        mesh: pMesh,
+        group: pGroup,
+        tiltGroup,
+        orbitLine,
+        axialTiltDeg: cfg.tilt,
+        rotationPeriodDays: cfg.rotPeriod,
+      });
+    });
+
+    // 3. Earth's Moon in Realistic Physical System (~384,400 km from Earth)
+    const earthNode = realPlanetNodes.find((p) => p.id === 'earth')!;
+    const realMoonOrbitLine = createOrbitLine('#cbd5e1');
+    realMoonOrbitLine.scale.set(1.35, 1.35, 1.35);
+    realMoonOrbitLine.rotation.x = 5.14 * DEG_TO_RAD;
+    earthNode.group.add(realMoonOrbitLine);
+
+    const realMoonMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 28, 28),
+      new THREE.MeshStandardMaterial({
+        map: moonTexture,
+        roughness: 0.9,
+        metalness: 0.04,
+      })
+    );
+    realMoonMesh.castShadow = true;
+    realMoonMesh.receiveShadow = true;
+    realMoonMesh.userData = { id: 'moon' };
+    earthNode.group.add(realMoonMesh);
+
+    // Deep cosmic star field (shared distant background stars)
+    const realStarsCount = 800;
+    const realStarsPos = new Float32Array(realStarsCount * 3);
+    for (let i = 0; i < realStarsCount; i++) {
+      const theta = 2 * Math.PI * Math.random();
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 120.0;
+      realStarsPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      realStarsPos[i * 3 + 1] = r * Math.cos(phi);
+      realStarsPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    const realStarsGeo = new THREE.BufferGeometry();
+    realStarsGeo.setAttribute('position', new THREE.BufferAttribute(realStarsPos, 3));
+    const realStarsPoints = new THREE.Points(
+      realStarsGeo,
+      new THREE.PointsMaterial({
+        color: '#e2e8f0',
+        size: 1.0,
+        transparent: true,
+        opacity: 0.65,
+        sizeAttenuation: false,
+      })
+    );
+    realisticSolarSystemGroup.add(realStarsPoints);
+
+    // =========================================================================
     // 7. Raycasting & Interaction
     // =========================================================================
     const raycaster = new THREE.Raycaster();
@@ -735,6 +934,22 @@ const planetaryNodes: PlanetaryNode[] = [];
 
       raycaster.setFromCamera(mouse, camera);
 
+      const isPhysical = stateRef.current.cosmologyMode === 'REALISTIC_PHYSICAL';
+      if (isPhysical) {
+        const realMeshes = [
+          realSunMesh,
+          realMoonMesh,
+          ...realPlanetNodes.map((n) => n.mesh),
+        ];
+        const hits = raycaster.intersectObjects(realMeshes);
+        if (hits.length > 0) {
+          const hitId = hits[0].object.userData?.id;
+          if (hitId) onSelectSphereRef.current(hitId);
+        }
+        return;
+      }
+
+      // Classical Geocentric raycasting
       const mansionHits = raycaster.intersectObjects(mansionNodes);
       if (mansionHits.length > 0) {
         const num = mansionHits[0].object.userData.mansionNumber;
@@ -810,54 +1025,134 @@ const planetaryNodes: PlanetaryNode[] = [];
       // -----------------------------------------------------------------------
       // Smooth Dynamic Camera Presets
       // -----------------------------------------------------------------------
-      if (state.cameraPreset === 'COSMIC') {
-        _vec3TargetPos.set(26, 20, 36);
-        _vec3TargetLook.set(0, 0, 0);
-        camera.position.lerp(_vec3TargetPos, 0.05);
-        controls.target.lerp(_vec3TargetLook, 0.05);
-      } else if (state.cameraPreset === 'EARTH_CLOSE' || state.cameraPreset === 'earth') {
-        _vec3TargetPos.set(2.8, 1.8, 3.2);
-        _vec3TargetLook.set(0, 0, 0);
-        camera.position.lerp(_vec3TargetPos, 0.06);
-        controls.target.lerp(_vec3TargetLook, 0.06);
-      } else if (state.cameraPreset === 'MOON_PHASE') {
-        moonMesh.getWorldPosition(_vec3A);
-        _vec3TargetPos.set(_vec3A.x * 1.5, _vec3A.y + 2, _vec3A.z * 1.5);
-        camera.position.lerp(_vec3TargetPos, 0.05);
-        controls.target.lerp(_vec3A, 0.05);
-      } else if (state.cameraPreset === 'ECLIPTIC_SIDE') {
-        // Lateral view looking directly along equinoctial X-axis showing exact 23.44° intersection
-        _vec3TargetPos.set(46, 0.5, 0);
-        _vec3TargetLook.set(0, 0, 0);
-        camera.position.lerp(_vec3TargetPos, 0.05);
-        controls.target.lerp(_vec3TargetLook, 0.05);
-      } else if (state.cameraPreset === 'POLAR_NORTH') {
-        // Looking down the polar Y-axis
-        _vec3TargetPos.set(0, 52, 0.1);
-        _vec3TargetLook.set(0, 0, 0);
-        camera.position.lerp(_vec3TargetPos, 0.05);
-        controls.target.lerp(_vec3TargetLook, 0.05);
-      } else if (state.cameraPreset === 'sun') {
-        sunMesh.getWorldPosition(_vec3A);
-        _vec3TargetPos.set(_vec3A.x * 1.35, _vec3A.y + 2.5, _vec3A.z * 1.35);
-        camera.position.lerp(_vec3TargetPos, 0.05);
-        controls.target.lerp(_vec3A, 0.05);
-      } else if (['mercury', 'venus', 'mars', 'jupiter', 'saturn'].includes(state.cameraPreset || '')) {
-        const targetNode = planetaryNodes.find((p) => p.id === state.cameraPreset);
-        if (targetNode) {
-          targetNode.planetMesh.getWorldPosition(_vec3A);
-          _vec3TargetPos.set(_vec3A.x + 2.8, _vec3A.y + 2.0, _vec3A.z + 2.8);
+      const isPhysical = state.cosmologyMode === 'REALISTIC_PHYSICAL';
+
+      if (isPhysical) {
+        if (state.cameraPreset === 'COSMIC') {
+          _vec3TargetPos.set(0, 36, 52);
+          _vec3TargetLook.set(0, 0, 0);
+          camera.position.lerp(_vec3TargetPos, 0.05);
+          controls.target.lerp(_vec3TargetLook, 0.05);
+        } else if (state.cameraPreset === 'POLAR_NORTH') {
+          _vec3TargetPos.set(0, 64, 0.1);
+          _vec3TargetLook.set(0, 0, 0);
+          camera.position.lerp(_vec3TargetPos, 0.05);
+          controls.target.lerp(_vec3TargetLook, 0.05);
+        } else if (state.cameraPreset === 'sun') {
+          _vec3TargetPos.set(0, 4.5, 9);
+          _vec3TargetLook.set(0, 0, 0);
+          camera.position.lerp(_vec3TargetPos, 0.05);
+          controls.target.lerp(_vec3TargetLook, 0.05);
+        } else if (state.cameraPreset === 'moon') {
+          realMoonMesh.getWorldPosition(_vec3A);
+          _vec3TargetPos.set(_vec3A.x + 1.2, _vec3A.y + 0.6, _vec3A.z + 1.2);
           camera.position.lerp(_vec3TargetPos, 0.05);
           controls.target.lerp(_vec3A, 0.05);
+        } else if (state.cameraPreset) {
+          const targetNode = realPlanetNodes.find((p) => p.id === state.cameraPreset);
+          if (targetNode) {
+            targetNode.mesh.getWorldPosition(_vec3A);
+            const offset = ['jupiter', 'saturn'].includes(targetNode.id)
+              ? 4.5
+              : ['uranus', 'neptune'].includes(targetNode.id)
+              ? 3.2
+              : 2.2;
+            _vec3TargetPos.set(_vec3A.x + offset, _vec3A.y + offset * 0.5, _vec3A.z + offset);
+            camera.position.lerp(_vec3TargetPos, 0.05);
+            controls.target.lerp(_vec3A, 0.05);
+          }
+        }
+      } else {
+        // Classical Geocentric Camera Presets
+        if (state.cameraPreset === 'COSMIC') {
+          _vec3TargetPos.set(26, 20, 36);
+          _vec3TargetLook.set(0, 0, 0);
+          camera.position.lerp(_vec3TargetPos, 0.05);
+          controls.target.lerp(_vec3TargetLook, 0.05);
+        } else if (state.cameraPreset === 'EARTH_CLOSE' || state.cameraPreset === 'earth') {
+          _vec3TargetPos.set(2.8, 1.8, 3.2);
+          _vec3TargetLook.set(0, 0, 0);
+          camera.position.lerp(_vec3TargetPos, 0.06);
+          controls.target.lerp(_vec3TargetLook, 0.06);
+        } else if (state.cameraPreset === 'MOON_PHASE') {
+          moonMesh.getWorldPosition(_vec3A);
+          _vec3TargetPos.set(_vec3A.x * 1.5, _vec3A.y + 2, _vec3A.z * 1.5);
+          camera.position.lerp(_vec3TargetPos, 0.05);
+          controls.target.lerp(_vec3A, 0.05);
+        } else if (state.cameraPreset === 'ECLIPTIC_SIDE') {
+          _vec3TargetPos.set(46, 0.5, 0);
+          _vec3TargetLook.set(0, 0, 0);
+          camera.position.lerp(_vec3TargetPos, 0.05);
+          controls.target.lerp(_vec3TargetLook, 0.05);
+        } else if (state.cameraPreset === 'POLAR_NORTH') {
+          _vec3TargetPos.set(0, 52, 0.1);
+          _vec3TargetLook.set(0, 0, 0);
+          camera.position.lerp(_vec3TargetPos, 0.05);
+          controls.target.lerp(_vec3TargetLook, 0.05);
+        } else if (state.cameraPreset === 'sun') {
+          sunMesh.getWorldPosition(_vec3A);
+          _vec3TargetPos.set(_vec3A.x * 1.35, _vec3A.y + 2.5, _vec3A.z * 1.35);
+          camera.position.lerp(_vec3TargetPos, 0.05);
+          controls.target.lerp(_vec3A, 0.05);
+        } else if (['mercury', 'venus', 'mars', 'jupiter', 'saturn'].includes(state.cameraPreset || '')) {
+          const targetNode = planetaryNodes.find((p) => p.id === state.cameraPreset);
+          if (targetNode) {
+            targetNode.planetMesh.getWorldPosition(_vec3A);
+            _vec3TargetPos.set(_vec3A.x + 2.8, _vec3A.y + 2.0, _vec3A.z + 2.8);
+            camera.position.lerp(_vec3TargetPos, 0.05);
+            controls.target.lerp(_vec3A, 0.05);
+          }
         }
       }
 
       controls.update();
 
+      // Dual Cosmology Modes Visibility & Lighting
+      geocentricRootGroup.visible = !isPhysical;
+      realisticSolarSystemGroup.visible = isPhysical;
+      sunPointLight.intensity = !isPhysical ? 5.5 : 0;
+      realSunLight.intensity = isPhysical ? 6.0 : 0;
+
+      // -----------------------------------------------------------------------
+      // REALISTIC PHYSICAL HELIOCENTRIC UPDATE
+      // -----------------------------------------------------------------------
+      if (isPhysical) {
+        const realCalc = calculateRealisticSolarSystemPositions(currentJD, state.scaleMode);
+
+        realCalc.planets.forEach((pPos) => {
+          const pNode = realPlanetNodes.find((n) => n.id === pPos.id);
+          if (pNode) {
+            pNode.group.position.set(pPos.x, pPos.y, pPos.z);
+            pNode.orbitLine.scale.set(pPos.orbitRadius, pPos.orbitRadius, pPos.orbitRadius);
+            pNode.orbitLine.visible = state.showOrbits;
+            // Diurnal spin around tilted axis
+            const spinAngle = ((currentJD / pNode.rotationPeriodDays) * Math.PI * 2) % (Math.PI * 2);
+            pNode.mesh.rotation.y = spinAngle;
+          }
+        });
+
+        // Earth's Moon relative to Earth
+        const moonPos = realCalc.moon;
+        const relMoonX = moonPos.x - realCalc.earthPos.x;
+        const relMoonY = moonPos.y - realCalc.earthPos.y;
+        const relMoonZ = moonPos.z - realCalc.earthPos.z;
+        realMoonMesh.position.set(relMoonX, relMoonY, relMoonZ);
+        realMoonOrbitLine.scale.set(moonPos.orbitRadius, moonPos.orbitRadius, moonPos.orbitRadius);
+        realMoonOrbitLine.visible = state.showOrbits;
+        realMoonMesh.rotation.y = (moonPos.heliocentricLongitudeDeg * DEG_TO_RAD);
+
+        // Sun axial rotation (~25 days differential equator)
+        realSunMesh.rotation.y = ((currentJD / 25.05) * Math.PI * 2) % (Math.PI * 2);
+
+        renderer.render(scene, camera);
+        return;
+      }
+
+      // -----------------------------------------------------------------------
+      // CLASSICAL GEOCENTRIC UPDATE (FALAK AL-ATLAS & PTOLEMAIC KINEMATICS)
       // -----------------------------------------------------------------------
       // 1. PRIMARY DIURNAL MOTION via FALAK AL-ATLAS (24-hour East-to-West cycle)
       // Derived strictly from Local Sidereal Time (θ) for observer longitude!
-      // -----------------------------------------------------------------------
       const sidereal = calculateSiderealTime(currentJD, state.selectedLocation.longitude);
       if (state.isAtlasAutoRotating) {
         falakAtlasGroup.rotation.y = sidereal.diurnalRotationRad;

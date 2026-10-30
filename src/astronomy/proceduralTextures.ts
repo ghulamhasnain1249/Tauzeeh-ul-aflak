@@ -538,3 +538,75 @@ export function createSunParticleTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   return texture;
 }
+
+/**
+ * Procedural Uranus Ice Giant Atmosphere Texture (أُورَانُوس)
+ * Featureless cyan-aquamarine with delicate polar haze and methane clouds
+ */
+export function createUranusTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Smooth cyan-aquamarine gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#a5f3fc');
+  grad.addColorStop(0.2, '#67e8f9');
+  grad.addColorStop(0.5, '#22d3ee');
+  grad.addColorStop(0.8, '#06b6d4');
+  grad.addColorStop(1, '#a5f3fc');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 256);
+
+  // Subtle latitudinal haze
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+  for (let y = 30; y < 230; y += 18) {
+    ctx.fillRect(0, y, 512, 6);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+/**
+ * Procedural Neptune Ice Giant Atmosphere Texture (نِبْتُون)
+ * Vibrant azure cobalt blue with high-altitude cirrus streaks and Great Dark Spot
+ */
+export function createNeptuneTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+
+  // Deep azure blue planetary gradient
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#1d4ed8');
+  grad.addColorStop(0.3, '#2563eb');
+  grad.addColorStop(0.5, '#1e40af');
+  grad.addColorStop(0.7, '#3b82f6');
+  grad.addColorStop(1, '#1e3a8a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 256);
+
+  // High-altitude white methane cirrus cloud streaks
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.fillRect(80, 70, 160, 4);
+  ctx.fillRect(300, 140, 130, 5);
+  ctx.fillRect(40, 180, 200, 4);
+
+  // Great Dark Spot (deep vortex)
+  const spotGrad = ctx.createRadialGradient(340, 100, 4, 340, 100, 24);
+  spotGrad.addColorStop(0, '#0f172a');
+  spotGrad.addColorStop(0.8, '#1e3a8a');
+  spotGrad.addColorStop(1, 'rgba(30, 58, 138, 0)');
+  ctx.fillStyle = spotGrad;
+  ctx.beginPath();
+  ctx.ellipse(340, 100, 28, 16, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
